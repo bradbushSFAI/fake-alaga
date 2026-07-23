@@ -70,12 +70,13 @@ export class CutsceneScene extends Phaser.Scene {
     this.textObj = this.add.text(70, 300, "", { ...txtStyle(16), lineSpacing: 12 });
 
     const hint = this.add
-      .text(W / 2, H - 50, "SPACE — CONTINUE", txtStyle(13, "#8888aa"))
+      .text(W / 2, H - 50, "SPACE / TAP — CONTINUE", txtStyle(13, "#8888aa"))
       .setOrigin(0.5);
     this.tweens.add({ targets: hint, alpha: 0.3, duration: 600, yoyo: true, repeat: -1 });
 
     this.input.keyboard!.on("keydown-SPACE", () => this.advance());
     this.input.keyboard!.on("keydown-ENTER", () => this.advance());
+    this.input.on("pointerdown", () => this.advance());
   }
 
   private buildWorldArt(w: number): void {

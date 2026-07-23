@@ -15,6 +15,7 @@ import {
 } from "../state";
 import { worldOf, WORLDS } from "../levels";
 import { Starfield } from "../starfield";
+import { LetterPad, isTouchDevice } from "../touch";
 
 type Mode = "title" | "menu" | "options" | "scores" | "code";
 
@@ -30,6 +31,7 @@ export class MenuScene extends Phaser.Scene {
   private codeChars: string[] = [];
   private keys!: Record<string, Phaser.Input.Keyboard.Key>;
   private unlocked = false;
+  private codePad: LetterPad | null = null;
 
   constructor() {
     super("Menu");
@@ -51,6 +53,17 @@ export class MenuScene extends Phaser.Scene {
     kb.on("keydown", (ev: KeyboardEvent) => this.onKey(ev));
     this.input.once("pointerdown", () => audio.unlock());
 
+    // touch: tap-through on the passive screens (items handle their own taps)
+    this.input.on("pointerdown", () => {
+      if (this.mode === "title") {
+        audio.sfx("menuSel");
+        this.showMenu();
+      } else if (this.mode === "scores") {
+        audio.sfx("menuSel");
+        this.showMenu();
+      }
+    });
+
     this.showTitle();
 
     this.events.on("shutdown", () => {
@@ -65,6 +78,15 @@ export class MenuScene extends Phaser.Scene {
   private clearUI(): void {
     this.ui.forEach((o) => o.destroy());
     this.ui = [];
+    if (this.codePad) {
+      this.codePad.destroy();
+      this.codePad = null;
+    }
+    this.codeSlotTexts = [];
+    if (this.codeMsg) {
+      this.codeMsg.destroy();
+      this.codeMsg = null;
+    }
   }
 
   private add_<T extends Phaser.GameObjects.GameObject>(obj: T): T {
@@ -101,7 +123,7 @@ export class MenuScene extends Phaser.Scene {
     const ship = this.add_(this.add.image(W / 2, 400, "player"));
     this.tweens.add({ targets: ship, x: W / 2 + 40, duration: 1600, yoyo: true, repeat: -1, ease: "Sine.inOut" });
 
-    const press = this.text(W / 2, 500, "PRESS SPACE", 22, "#ffffff");
+    const press = this.text(W / 2, 500, isTouchDevice() ? "TAP TO START" : "PRESS SPACE", 22, "#ffffff");
     this.tweens.add({ targets: press, alpha: 0.2, duration: 550, yoyo: true, repeat: -1 });
 
     this.text(W / 2, 585, `HIGH SCORE  ${highScore().toString().padStart(6, "0")}`, 16, "#ffe040");
@@ -114,7 +136,16 @@ export class MenuScene extends Phaser.Scene {
     this.mode = "menu";
     this.text(W / 2, 150, "FAKE-ALAGA", 40, "#ffe040").setStroke("#ff3060", 6);
     MENU_ITEMS.forEach((item, i) => {
-      this.text(W / 2, 300 + i * 52, item, 24, i === this.menuIdx ? "#ffe040" : "#8888aa");
+      const t = this.text(W / 2, 300 + i * 52, item, 24, i === this.menuIdx ? "#ffe040" : "#8888aa");
+      (t as Phaser.GameObjects.Text)
+        .setPadding(16, 10, 16, 10)
+        .setInteractive({ useHandCursor: true })
+        .on("pointerdown", (_p: unknown, _x: unknown, _y: unknown, ev: Phaser.Types.Input.EventData) => {
+          ev?.stopPropagation?.();
+          this.menuIdx = i;
+          audio.sfx("menuSel");
+          this.activateMenuItem();
+        });
     });
     this.text(W / 2, 560, `DIFFICULTY  SPD ${this.settings.speed} / TGH ${this.settings.tough}  ·  SCORE ×${scoreMult(this.settings).toFixed(2)}`, 13, "#40e0ff");
     this.text(W / 2, 640, "W/S SELECT · SPACE CONFIRM", 12, "#8888aa");
@@ -141,12 +172,28 @@ export class MenuScene extends Phaser.Scene {
           this.add.rectangle(W / 2 - barW / 2 + seg * (barW / 10) + barW / 20, y + 6, barW / 10 - 6, 18, on ? (sel ? 0xffe040 : 0x8888aa) : 0x222244)
         );
         cell.setStrokeStyle(1, 0x444466);
+        // tap a segment to set that value directly
+        cell.setInteractive({ useHandCursor: true }).on("pointerdown", () => {
+          this.optIdx = i;
+          if (i === 0) this.settings.speed = clampSetting(seg + 1);
+          else this.settings.tough = clampSetting(seg + 1);
+          saveSettings(this.settings);
+          audio.sfx("menuMove");
+          this.showOptions();
+        });
       }
       this.text(W / 2 + barW / 2 + 30, y + 6, `${r.val}`, 18, sel ? "#ffe040" : "#8888aa");
     });
 
     const back = this.optIdx === 2;
-    this.text(W / 2, 500, "BACK", 20, back ? "#ffe040" : "#8888aa");
+    const backT = this.text(W / 2, 500, "BACK", 20, back ? "#ffe040" : "#8888aa");
+    (backT as Phaser.GameObjects.Text)
+      .setPadding(16, 10, 16, 10)
+      .setInteractive({ useHandCursor: true })
+      .on("pointerdown", () => {
+        audio.sfx("menuSel");
+        this.showMenu();
+      });
 
     this.text(W / 2, 570, `SCORE MULTIPLIER  ×${scoreMult(this.settings).toFixed(2)}`, 16, "#40e0ff");
     this.text(W / 2, 596, "HARDER ENEMIES = BIGGER SCORES", 12, "#8888aa");
@@ -179,15 +226,61 @@ export class MenuScene extends Phaser.Scene {
     this.mode = "code";
     this.codeChars = [];
     this.unlocked = false;
+    const touch = isTouchDevice();
     this.text(W / 2, 150, "ENTER CODE", 32, "#ffe040");
-    this.text(W / 2, 210, "TYPE THE 3-LETTER CHECKPOINT CODE", 14, "#8888aa");
+    this.text(W / 2, 205, touch ? "TAP IN THE 3-LETTER CHECKPOINT CODE" : "TYPE THE 3-LETTER CHECKPOINT CODE", 14, "#8888aa");
     this.renderCodeSlots();
     const earned = earnedCodes();
     if (earned.length) {
-      this.text(W / 2, 480, "CODES YOU HAVE EARNED:", 14, "#40e0ff");
-      this.text(W / 2, 510, earned.join("   "), 18, "#ffe040");
+      this.text(W / 2, touch ? 245 : 480, "CODES YOU HAVE EARNED:", 13, "#40e0ff");
+      this.text(W / 2, touch ? 270 : 510, earned.join("   "), 16, "#ffe040");
     }
-    this.text(W / 2, 650, "TYPE LETTERS · BACKSPACE ERASE · ESC BACK", 12, "#8888aa");
+    if (touch) {
+      this.codePad = new LetterPad(this, 460, (ch) => this.addCodeChar(ch), () => this.delCodeChar());
+      const backT = this.text(W / 2, 665, "◀ BACK", 16, "#8888aa");
+      (backT as Phaser.GameObjects.Text)
+        .setPadding(14, 8, 14, 8)
+        .setInteractive({ useHandCursor: true })
+        .on("pointerdown", () => {
+          audio.sfx("menuSel");
+          this.showMenu();
+        });
+    } else {
+      this.text(W / 2, 650, "TYPE LETTERS · BACKSPACE ERASE · ESC BACK", 12, "#8888aa");
+    }
+  }
+
+  private addCodeChar(ch: string): void {
+    if (this.mode !== "code" || this.unlocked || this.codeChars.length >= 3) return;
+    this.codeChars.push(ch.toUpperCase());
+    audio.sfx("type");
+    this.renderCodeSlots();
+    if (this.codeChars.length === 3) {
+      const code = this.codeChars.join("");
+      const level = levelForCode(code);
+      if (level) {
+        this.unlocked = true;
+        audio.sfx("code");
+        const w = worldOf(level);
+        this.setCodeMsg(`CHECKPOINT ACCEPTED — ${WORLDS[w].name}`, "#30e060");
+        this.time.delayedCall(1100, () => this.startGame(level));
+      } else {
+        audio.sfx("hit");
+        this.setCodeMsg("UNKNOWN CODE", "#ff5050");
+        this.time.delayedCall(700, () => {
+          this.codeChars = [];
+          this.renderCodeSlots();
+          if (this.codeMsg) this.codeMsg.destroy();
+          this.codeMsg = null;
+        });
+      }
+    }
+  }
+
+  private delCodeChar(): void {
+    if (this.mode !== "code" || this.unlocked) return;
+    this.codeChars.pop();
+    this.renderCodeSlots();
   }
 
   private codeSlotTexts: Phaser.GameObjects.Text[] = [];
@@ -238,21 +331,7 @@ export class MenuScene extends Phaser.Scene {
         this.showMenu();
       } else if (k === " " || k === "Enter") {
         audio.sfx("menuSel");
-        switch (this.menuIdx) {
-          case 0:
-            this.startGame(1);
-            break;
-          case 1:
-            this.showCode();
-            break;
-          case 2:
-            this.optIdx = 0;
-            this.showOptions();
-            break;
-          case 3:
-            this.showScores();
-            break;
-        }
+        this.activateMenuItem();
       } else if (k === "Escape") {
         this.showTitle();
       }
@@ -292,38 +371,33 @@ export class MenuScene extends Phaser.Scene {
 
     if (this.mode === "code") {
       if (this.unlocked) return; // transition pending
-      if (/^[a-zA-Z]$/.test(k) && this.codeChars.length < 3) {
-        this.codeChars.push(k.toUpperCase());
-        audio.sfx("type");
-        this.renderCodeSlots();
-        if (this.codeChars.length === 3) {
-          const code = this.codeChars.join("");
-          const level = levelForCode(code);
-          if (level) {
-            this.unlocked = true;
-            audio.sfx("code");
-            const w = worldOf(level);
-            this.setCodeMsg(`CHECKPOINT ACCEPTED — ${WORLDS[w].name}`, "#30e060");
-            this.time.delayedCall(1100, () => this.startGame(level));
-          } else {
-            audio.sfx("hit");
-            this.setCodeMsg("UNKNOWN CODE", "#ff5050");
-            this.time.delayedCall(700, () => {
-              this.codeChars = [];
-              this.renderCodeSlots();
-              if (this.codeMsg) this.codeMsg.destroy();
-              this.codeMsg = null;
-            });
-          }
-        }
+      if (/^[a-zA-Z]$/.test(k)) {
+        this.addCodeChar(k);
       } else if (k === "Backspace") {
-        this.codeChars.pop();
-        this.renderCodeSlots();
+        this.delCodeChar();
       } else if (k === "Escape") {
         audio.sfx("menuSel");
         this.showMenu();
       }
       return;
+    }
+  }
+
+  private activateMenuItem(): void {
+    switch (this.menuIdx) {
+      case 0:
+        this.startGame(1);
+        break;
+      case 1:
+        this.showCode();
+        break;
+      case 2:
+        this.optIdx = 0;
+        this.showOptions();
+        break;
+      case 3:
+        this.showScores();
+        break;
     }
   }
 

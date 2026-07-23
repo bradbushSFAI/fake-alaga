@@ -12,6 +12,7 @@ import {
   highScore,
 } from "../state";
 import { LEVELS, WORLDS, ETYPES, BOSSES, worldOf, FINAL_LEVEL, LevelDef } from "../levels";
+import { TouchControls, isTouchDevice } from "../touch";
 
 const PLAYER_SPEED = 290;
 const BULLET_SPEED = 560;
@@ -84,6 +85,7 @@ export class GameScene extends Phaser.Scene {
   private fireCd = 0;
 
   private keys!: Record<string, Phaser.Input.Keyboard.Key>;
+  private touch: TouchControls | null = null;
 
   private pBullets!: Phaser.Physics.Arcade.Group;
   private missiles!: Phaser.Physics.Arcade.Group;
@@ -185,6 +187,7 @@ export class GameScene extends Phaser.Scene {
     this.input.keyboard!.on("keydown-ESC", () => this.togglePause());
     this.input.keyboard!.on("keydown-M", () => audio.toggleMute());
     this.input.once("pointerdown", () => audio.unlock());
+    this.touch = isTouchDevice() ? new TouchControls(this, () => this.togglePause()) : null;
 
     // overlaps
     this.physics.add.overlap(this.pBullets, this.enemies, (b, e) =>
@@ -987,17 +990,35 @@ export class GameScene extends Phaser.Scene {
   private togglePause(): void {
     if (this.levelEnding) return;
     this.paused = !this.paused;
+    if (this.touch) this.touch.blocked = this.paused;
     if (this.paused) {
       this.physics.pause();
       this.tweens.pauseAll();
       this.time.paused = true;
       const dim = this.add.rectangle(W / 2, H / 2, W, H, 0x000000, 0.6).setDepth(300);
-      const t1 = this.add.text(W / 2, H / 2 - 30, "PAUSED", txtStyle(36, "#ffe040")).setOrigin(0.5).setDepth(301);
+      const t1 = this.add.text(W / 2, H / 2 - 60, "PAUSED", txtStyle(36, "#ffe040")).setOrigin(0.5).setDepth(301);
+      const bResume = this.add
+        .text(W / 2, H / 2 + 10, "▶ RESUME", txtStyle(20, "#30e060"))
+        .setOrigin(0.5)
+        .setDepth(301)
+        .setPadding(14, 8, 14, 8)
+        .setInteractive({ useHandCursor: true });
+      bResume.on("pointerdown", () => this.togglePause());
+      const bQuit = this.add
+        .text(W / 2, H / 2 + 60, "✕ QUIT TO TITLE", txtStyle(16, "#ff8080"))
+        .setOrigin(0.5)
+        .setDepth(301)
+        .setPadding(14, 8, 14, 8)
+        .setInteractive({ useHandCursor: true });
+      bQuit.on("pointerdown", () => {
+        audio.stop();
+        this.scene.start("Menu");
+      });
       const t2 = this.add
-        .text(W / 2, H / 2 + 30, "P — RESUME · Q — QUIT TO TITLE", txtStyle(14, "#8888aa"))
+        .text(W / 2, H / 2 + 110, "P — RESUME · Q — QUIT", txtStyle(12, "#8888aa"))
         .setOrigin(0.5)
         .setDepth(301);
-      this.pauseOverlay = [dim, t1, t2];
+      this.pauseOverlay = [dim, t1, bResume, bQuit, t2];
       const quit = () => {
         this.input.keyboard!.off("keydown-Q", quit);
         audio.stop();
@@ -1033,21 +1054,26 @@ export class GameScene extends Phaser.Scene {
     const body = p.body as Phaser.Physics.Arcade.Body;
 
     if (this.playerAlive && !this.capturing) {
-      let vx = 0;
-      let vy = 0;
-      if (this.keys.A.isDown || this.keys.LEFT.isDown) vx -= 1;
-      if (this.keys.D.isDown || this.keys.RIGHT.isDown) vx += 1;
-      if (this.keys.W.isDown || this.keys.UP.isDown) vy -= 1;
-      if (this.keys.S.isDown || this.keys.DOWN.isDown) vy += 1;
-      const len = Math.hypot(vx, vy) || 1;
-      body.setVelocity((vx / len) * PLAYER_SPEED, (vy / len) * PLAYER_SPEED);
+      if (this.touch?.active) {
+        // analog thumbstick: magnitude scales speed
+        body.setVelocity(this.touch.vec.x * PLAYER_SPEED, this.touch.vec.y * PLAYER_SPEED);
+      } else {
+        let vx = 0;
+        let vy = 0;
+        if (this.keys.A.isDown || this.keys.LEFT.isDown) vx -= 1;
+        if (this.keys.D.isDown || this.keys.RIGHT.isDown) vx += 1;
+        if (this.keys.W.isDown || this.keys.UP.isDown) vy -= 1;
+        if (this.keys.S.isDown || this.keys.DOWN.isDown) vy += 1;
+        const len = Math.hypot(vx, vy) || 1;
+        body.setVelocity((vx / len) * PLAYER_SPEED, (vy / len) * PLAYER_SPEED);
+      }
 
       // blink while invulnerable
       p.setAlpha(this.invuln > 0 ? (Math.floor(this.formT / 90) % 2 ? 0.25 : 1) : 1);
 
       // shooting
       this.fireCd -= dt;
-      if (this.keys.SPACE.isDown && this.fireCd <= 0) {
+      if ((this.keys.SPACE.isDown || this.touch?.firing) && this.fireCd <= 0) {
         this.firePlayer();
       }
     } else {

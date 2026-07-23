@@ -2,8 +2,39 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+    />
     <title>FAKE-ALAGA</title>
+    <meta
+      name="description"
+      content="FAKE-ALAGA — a free 8-bit space shooter you can play in your browser. 25 levels, 5 bosses, chiptune soundtrack. Every sprite and note generated in code."
+    />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>👾</text></svg>"
+    />
+
+    <!-- Open Graph / LinkedIn / social preview -->
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="FAKE-ALAGA — Galactic Remix" />
+    <meta
+      property="og:description"
+      content="A free 8-bit space shooter in your browser. 25 levels, 5 bosses, capture-beam dual ships, chiptune soundtrack — every sprite and note generated in code. Works on desktop and mobile."
+    />
+    <meta property="og:url" content="https://fake-alaga.vercel.app/" />
+    <meta property="og:image" content="https://fake-alaga.vercel.app/og.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="FAKE-ALAGA — Galactic Remix" />
+    <meta
+      name="twitter:description"
+      content="A free 8-bit space shooter in your browser. 25 levels, 5 bosses, chiptune soundtrack — all generated in code."
+    />
+    <meta name="twitter:image" content="https://fake-alaga.vercel.app/og.png" />
+
     <style>
       html,
       body {
@@ -12,6 +43,11 @@
         background: #05050c;
         height: 100%;
         overflow: hidden;
+        touch-action: none;
+        -webkit-user-select: none;
+        user-select: none;
+        -webkit-tap-highlight-color: transparent;
+        overscroll-behavior: none;
       }
       #game {
         display: flex;
@@ -21,6 +57,7 @@
       }
       canvas {
         image-rendering: pixelated;
+        touch-action: none;
       }
     </style>
   </head>

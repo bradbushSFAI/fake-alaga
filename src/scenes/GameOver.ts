@@ -3,6 +3,7 @@ import { W, H, txtStyle } from "../const";
 import { audio } from "../audio";
 import { Starfield } from "../starfield";
 import { qualifies, addScore, loadScores, loadSettings, scoreMult } from "../state";
+import { LetterPad, isTouchDevice } from "../touch";
 
 interface GameOverData {
   score: number;
@@ -18,6 +19,7 @@ export class GameOverScene extends Phaser.Scene {
   private slotTexts: Phaser.GameObjects.Text[] = [];
   private stars!: Starfield;
   private inputReady = false;
+  private pad: LetterPad | null = null;
 
   constructor() {
     super("GameOver");
@@ -42,12 +44,16 @@ export class GameOverScene extends Phaser.Scene {
     this.entering = qualifies(data.score);
     if (this.entering) {
       audio.play("menu");
-      this.add.text(W / 2, 330, "NEW HIGH SCORE!", txtStyle(22, "#30e060")).setOrigin(0.5);
-      this.add.text(W / 2, 368, "ENTER YOUR INITIALS", txtStyle(14, "#8888aa")).setOrigin(0.5);
+      this.add.text(W / 2, 320, "NEW HIGH SCORE!", txtStyle(22, "#30e060")).setOrigin(0.5);
+      this.add.text(W / 2, 355, "ENTER YOUR INITIALS", txtStyle(14, "#8888aa")).setOrigin(0.5);
       this.renderSlots();
-      this.add
-        .text(W / 2, 500, "TYPE 3 LETTERS · BACKSPACE ERASE", txtStyle(12, "#8888aa"))
-        .setOrigin(0.5);
+      if (isTouchDevice()) {
+        this.pad = new LetterPad(this, 490, (ch) => this.addInitial(ch), () => this.delInitial());
+      } else {
+        this.add
+          .text(W / 2, 500, "TYPE 3 LETTERS · BACKSPACE ERASE", txtStyle(12, "#8888aa"))
+          .setOrigin(0.5);
+      }
     } else {
       this.showTable();
     }
@@ -56,6 +62,14 @@ export class GameOverScene extends Phaser.Scene {
     this.inputReady = false;
     this.time.delayedCall(700, () => (this.inputReady = true));
     this.input.keyboard!.on("keydown", (ev: KeyboardEvent) => this.onKey(ev));
+    // tap-to-continue once the table is showing
+    this.input.on("pointerdown", () => {
+      if (!this.entering && this.inputReady) {
+        audio.sfx("menuSel");
+        audio.stop();
+        this.scene.start("Menu");
+      }
+    });
   }
 
   update(_t: number, dt: number): void {
@@ -91,30 +105,49 @@ export class GameOverScene extends Phaser.Scene {
     this.tweens.add({ targets: hint, alpha: 0.3, duration: 600, yoyo: true, repeat: -1 });
   }
 
+  private addInitial(ch: string): void {
+    if (!this.entering || !this.inputReady || this.initials.length >= 3) return;
+    this.initials.push(ch.toUpperCase());
+    audio.sfx("type");
+    this.renderSlots();
+    if (this.initials.length === 3) {
+      this.entering = false;
+      audio.sfx("code");
+      addScore({
+        name: this.initials.join(""),
+        score: this.data_.score,
+        mult: scoreMult(loadSettings()),
+        level: this.data_.level,
+        won: this.data_.won,
+      });
+      // block the same tap from also triggering tap-to-continue
+      this.inputReady = false;
+      this.time.delayedCall(400, () => {
+        if (this.pad) {
+          this.pad.destroy();
+          this.pad = null;
+        }
+        this.showTable();
+        this.time.delayedCall(500, () => (this.inputReady = true));
+      });
+    }
+  }
+
+  private delInitial(): void {
+    if (!this.entering) return;
+    this.initials.pop();
+    this.renderSlots();
+  }
+
   private onKey(ev: KeyboardEvent): void {
     audio.unlock();
     if (!this.inputReady || ev.repeat) return;
     const k = ev.key;
     if (this.entering) {
-      if (/^[a-zA-Z]$/.test(k) && this.initials.length < 3) {
-        this.initials.push(k.toUpperCase());
-        audio.sfx("type");
-        this.renderSlots();
-        if (this.initials.length === 3) {
-          this.entering = false;
-          audio.sfx("code");
-          addScore({
-            name: this.initials.join(""),
-            score: this.data_.score,
-            mult: scoreMult(loadSettings()),
-            level: this.data_.level,
-            won: this.data_.won,
-          });
-          this.time.delayedCall(400, () => this.showTable());
-        }
+      if (/^[a-zA-Z]$/.test(k)) {
+        this.addInitial(k);
       } else if (k === "Backspace") {
-        this.initials.pop();
-        this.renderSlots();
+        this.delInitial();
       }
       return;
     }
