@@ -29,3 +29,6 @@ against a static build, and local-vs-sandbox differences have surfaced real bugs
   which can deliver one physical press multiple times. Keep it that way.
 - Held keys (WASD/Space movement+fire) poll `key.isDown` — that's safe.
 - Deploys: push to `main` auto-deploys to Vercel (https://fake-alaga.vercel.app).
+- **Mute before browser playtests:** the chiptune plays through Brad's speakers
+  when driving the game in a headed browser. Toggle mute first
+  (`window.__audio.toggleMute()` or press M) — Brad may be on a call.
