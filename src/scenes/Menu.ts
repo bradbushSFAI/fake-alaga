@@ -50,7 +50,11 @@ export class MenuScene extends Phaser.Scene {
       Phaser.Input.Keyboard.Key
     >;
 
-    kb.on("keydown", (ev: KeyboardEvent) => this.onKey(ev));
+    // Bind the raw DOM event: Phaser's generic "keydown" emit can deliver the
+    // same physical press multiple times (and even during keyup processing).
+    const domKey = (ev: KeyboardEvent) => this.onKey(ev);
+    window.addEventListener("keydown", domKey);
+    this.events.on("shutdown", () => window.removeEventListener("keydown", domKey));
     this.input.once("pointerdown", () => audio.unlock());
 
     // touch: tap-through on the passive screens (items handle their own taps)
@@ -66,9 +70,6 @@ export class MenuScene extends Phaser.Scene {
 
     this.showTitle();
 
-    this.events.on("shutdown", () => {
-      kb.off("keydown");
-    });
   }
 
   update(_t: number, dt: number): void {

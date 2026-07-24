@@ -74,8 +74,13 @@ export class CutsceneScene extends Phaser.Scene {
       .setOrigin(0.5);
     this.tweens.add({ targets: hint, alpha: 0.3, duration: 600, yoyo: true, repeat: -1 });
 
-    this.input.keyboard!.on("keydown-SPACE", () => this.advance());
-    this.input.keyboard!.on("keydown-ENTER", () => this.advance());
+    // Raw DOM listener — Phaser's key events can multi-deliver one press.
+    const domKey = (ev: KeyboardEvent) => {
+      if (ev.repeat) return;
+      if (ev.key === " " || ev.key === "Enter") this.advance();
+    };
+    window.addEventListener("keydown", domKey);
+    this.events.on("shutdown", () => window.removeEventListener("keydown", domKey));
     this.input.on("pointerdown", () => this.advance());
   }
 

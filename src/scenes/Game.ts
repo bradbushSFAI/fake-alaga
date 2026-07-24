@@ -183,9 +183,14 @@ export class GameScene extends Phaser.Scene {
       string,
       Phaser.Input.Keyboard.Key
     >;
-    this.input.keyboard!.on("keydown-P", () => this.togglePause());
-    this.input.keyboard!.on("keydown-ESC", () => this.togglePause());
-    this.input.keyboard!.on("keydown-M", () => audio.toggleMute());
+    // Raw DOM listener for one-shot keys — Phaser's key events can multi-deliver one press.
+    const domKey = (ev: KeyboardEvent) => {
+      if (ev.repeat) return;
+      if (ev.key === "p" || ev.key === "P" || ev.key === "Escape") this.togglePause();
+      else if (ev.key === "m" || ev.key === "M") audio.toggleMute();
+    };
+    window.addEventListener("keydown", domKey);
+    this.events.on("shutdown", () => window.removeEventListener("keydown", domKey));
     this.input.once("pointerdown", () => audio.unlock());
     this.touch = isTouchDevice() ? new TouchControls(this, () => this.togglePause()) : null;
 

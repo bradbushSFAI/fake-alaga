@@ -61,7 +61,10 @@ export class GameOverScene extends Phaser.Scene {
     // Grace period so held/repeating movement keys can't type initials.
     this.inputReady = false;
     this.time.delayedCall(700, () => (this.inputReady = true));
-    this.input.keyboard!.on("keydown", (ev: KeyboardEvent) => this.onKey(ev));
+    // Raw DOM listener — Phaser's generic "keydown" emit can multi-deliver one press.
+    const domKey = (ev: KeyboardEvent) => this.onKey(ev);
+    window.addEventListener("keydown", domKey);
+    this.events.on("shutdown", () => window.removeEventListener("keydown", domKey));
     // tap-to-continue once the table is showing
     this.input.on("pointerdown", () => {
       if (!this.entering && this.inputReady) {

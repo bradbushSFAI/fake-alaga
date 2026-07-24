@@ -12,5 +12,6 @@
     "strict": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src", "tests"]
+  "include": ["src", "tests"],
+  "exclude": ["tests/e2e"]
 }

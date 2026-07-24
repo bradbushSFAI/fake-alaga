@@ -5,6 +5,7 @@ import { MenuScene } from "./scenes/Menu";
 import { CutsceneScene } from "./scenes/Cutscene";
 import { GameScene } from "./scenes/Game";
 import { GameOverScene } from "./scenes/GameOver";
+import { audio } from "./audio";
 
 const game = new Phaser.Game({
   type: Phaser.AUTO,
@@ -24,5 +25,7 @@ const game = new Phaser.Game({
   scene: [BootScene, MenuScene, CutsceneScene, GameScene, GameOverScene],
 });
 
-// Test/debug hook — lets automated playtests inspect scene state.
-(window as unknown as { __game: Phaser.Game }).__game = game;
+// Test/debug hooks — let automated playtests inspect game and audio state.
+const testWindow = window as unknown as { __game: Phaser.Game; __audio: typeof audio };
+testWindow.__game = game;
+testWindow.__audio = audio;
